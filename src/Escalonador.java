@@ -1,8 +1,4 @@
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 
 public class Escalonador {
     private List<Processo> listaProcessos;
@@ -17,58 +13,96 @@ public class Escalonador {
         this.quantum = quantum;
     }
 
-    public void adicionarProcesso(Processo processo) { listaProcessos.add(processo); }
+    public void adicionarProcesso(Processo processo) {
+        listaProcessos.add(processo);
+    }
 
-    // Sincronizando escalonamento: evita múltiplos escalonadores agindo simultaneamente
+    // Método principal de escalonamento
     public synchronized void escalonar() {
         switch (algoritmoSelecionado) {
-            case PRIORIDADE: escalonarPorPrioridade(); break;
-            case ROUND_ROBIN: escalonarRoundRobin(); break;
+            case PRIORIDADE:
+                escalonarPorPrioridade();
+                break;
+            case ROUND_ROBIN:
+                escalonarRoundRobin();
+                break;
         }
     }
 
+    // Escalonamento por prioridade
     private void escalonarPorPrioridade() {
-        System.out.println("Iniciando escalonamento por PRIORIDADE...\n");
-        while (!listaProcessos.isEmpty()) {
-            Collections.sort(listaProcessos, (p1, p2) -> Integer.compare(p2.getPrioridade(), p1.getPrioridade()));
-            Processo processoSelecionado = listaProcessos.remove(0);
-            processoSelecionado.pronto();
+        System.out.println("\n===== ESCALONAMENTO POR PRIORIDADE =====\n");
 
-            Thread t = new Thread(processoSelecionado);
-            t.start();
-            try {
-                t.join(); // aguarda o término de cada processo ANTES de iniciar o próximo
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        // Ordena pela prioridade (maior primeiro)
+        listaProcessos.sort((p1, p2) -> Integer.compare(p2.getPrioridade(), p1.getPrioridade()));
+
+        // Inicia todas as threads (concorrência real)
+        for (Processo p : listaProcessos) {
+            p.pronto();
+            new Thread(() -> p.executarQuantum(p.getTempoExecucao())).start();
         }
-        System.out.println("Escalonamento por prioridade concluído.\n");
+
+        // Aguarda todos finalizarem
+        aguardarConclusao();
+        System.out.println("Escalonamento por PRIORIDADE concluído.\n");
     }
 
-
+    // Escalonamento Round Robin com quantum
     private void escalonarRoundRobin() {
-        System.out.println("Iniciando escalonamento ROUND ROBIN...\n");
+        System.out.println("\n===== ESCALONAMENTO ROUND ROBIN =====\n");
+
         Queue<Processo> fila = new LinkedList<>(listaProcessos);
 
-        List<Thread> threads = new ArrayList<>();
+        // Continua até todos os processos finalizarem
         while (!fila.isEmpty()) {
             Processo processoAtual = fila.poll();
-            if (processoAtual.getEstado() == Processo.Estado.SUSPENSO ||
-                    processoAtual.getEstado() == Processo.Estado.PRONTO) {
+
+            if (processoAtual.getEstado() != Processo.Estado.FINALIZADO) {
                 processoAtual.pronto();
-                // Executa quantum em thread sincronizada
+
+                // Cria thread para executar um quantum
                 Thread t = new Thread(() -> processoAtual.executarQuantum(quantum));
-                threads.add(t);
                 t.start();
 
-                try { t.join(); } catch (InterruptedException e) { e.printStackTrace(); }
+                try {
+                    t.join(); // espera o quantum terminar
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
-                if (processoAtual.getTempoExecutado() < processoAtual.getTempoExecucao()) {
+                // Se ainda resta tempo, retorna o processo à fila
+                if (processoAtual.getEstado() != Processo.Estado.FINALIZADO) {
                     fila.add(processoAtual);
                 }
             }
+
+            // Log visual do estado da fila
+            mostrarFila(fila);
         }
-        // Já aguarda cada thread terminar nos joins acima.
-        System.out.println("Escalonamento Round Robin concluído.\n");
+
+        System.out.println("\nEscalonamento ROUND ROBIN concluído.\n");
+    }
+
+    // Mostra a fila atual
+    private void mostrarFila(Queue<Processo> fila) {
+        System.out.print("Fila atual: [ ");
+        for (Processo p : fila) {
+            System.out.print("P" + p.getIdProcesso() + " ");
+        }
+        System.out.println("]");
+    }
+
+    // Aguarda até que todos os processos estejam finalizados
+    private void aguardarConclusao() {
+        boolean todosFinalizados;
+        do {
+            todosFinalizados = listaProcessos.stream()
+                    .allMatch(p -> p.getEstado() == Processo.Estado.FINALIZADO);
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        } while (!todosFinalizados);
     }
 }

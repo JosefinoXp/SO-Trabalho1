@@ -1,7 +1,12 @@
 public class Main {
     public static void main(String[] args) {
-        // Escolha do algoritmo (troque para PRIORIDADE se quiser)
-        Escalonador escalonador = new Escalonador(Escalonador.Algoritmo.ROUND_ROBIN, 1000);
+        // Escolha o algoritmo (ROUND_ROBIN ou PRIORIDADE)
+        Escalonador.Algoritmo algoritmo = Escalonador.Algoritmo.ROUND_ROBIN;
+
+        // Quantum de 1000 ms (1 segundo)
+        int quantum = 1000;
+
+        Escalonador escalonador = new Escalonador(algoritmo, quantum);
 
         // Criação dos processos simulados
         escalonador.adicionarProcesso(new Processo(1, 3, 3000));
@@ -11,5 +16,7 @@ public class Main {
 
         // Executa o escalonamento
         escalonador.escalonar();
+
+        System.out.println("Simulação finalizada com sucesso!");
     }
 }
