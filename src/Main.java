@@ -1,7 +1,7 @@
 public class Main {
     public static void main(String[] args) {
         // Escolha o algoritmo (ROUND_ROBIN ou PRIORIDADE)
-        Escalonador.Algoritmo algoritmo = Escalonador.Algoritmo.ROUND_ROBIN;
+        Escalonador.Algoritmo algoritmo = Escalonador.Algoritmo.PRIORIDADE;
 
         // Quantum de 1000 ms (1 segundo)
         int quantum = 1000;

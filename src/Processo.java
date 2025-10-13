@@ -57,7 +57,7 @@ public class Processo extends Thread {
     // Marca como finalizado
     public synchronized void finalizar() {
         this.estado = Estado.FINALIZADO;
-        System.out.println("[Processo " + id + "] FINALIZADO ✅\n");
+        System.out.println("[Processo " + id + "] FINALIZADO\n");
     }
 
     // Getters

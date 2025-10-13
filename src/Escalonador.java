@@ -39,7 +39,13 @@ public class Escalonador {
         // Inicia todas as threads (concorrência real)
         for (Processo p : listaProcessos) {
             p.pronto();
-            new Thread(() -> p.executarQuantum(p.getTempoExecucao())).start();
+            Thread t = new Thread(() -> p.executarQuantum(p.getTempoExecucao()));
+            t.start();
+            try {
+                t.join(); // Espera o processo terminar antes de iniciar o próximo
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
         // Aguarda todos finalizarem
