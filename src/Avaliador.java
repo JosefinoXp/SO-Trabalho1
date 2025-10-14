@@ -21,8 +21,9 @@ public class Avaliador {
         this.cpuTotalNs = cpuTotalNs;
     }
 
-    public static List<Processo> gerarCargaDeTrabalho(int totalProcessos) {
-        Random rand = new Random(42);
+    // --- MÉTODO ATUALIZADO ---
+    public static List<Processo> gerarCargaDeTrabalho(int totalProcessos, int seed) {
+        Random rand = new Random(seed); // Usa a semente (seed) fornecida
         return java.util.stream.IntStream.rangeClosed(1, totalProcessos)
                 .mapToObj(i -> {
                     int prioridade = rand.nextInt(10) + 1;

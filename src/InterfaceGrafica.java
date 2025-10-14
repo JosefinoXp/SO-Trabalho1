@@ -7,6 +7,8 @@ public class InterfaceGrafica extends JFrame {
     private PainelMetricas painelMetricas;
     private JComboBox<Escalonador.Algoritmo> comboAlgoritmo;
     private JSpinner spinnerQuantum;
+    private JSpinner spinnerNumProcessos; // <-- NOVO
+    private JSpinner spinnerSeed;         // <-- NOVO
     private JButton btnIniciar;
     private JButton btnLimparHistorico;
 
@@ -26,6 +28,16 @@ public class InterfaceGrafica extends JFrame {
         painelControle.add(new JLabel("Quantum (ms):"));
         spinnerQuantum = new JSpinner(new SpinnerNumberModel(1000, 100, 5000, 100));
         painelControle.add(spinnerQuantum);
+
+        // --- NOVOS CAMPOS ADICIONADOS AQUI ---
+        painelControle.add(new JLabel("Nº de Processos:"));
+        spinnerNumProcessos = new JSpinner(new SpinnerNumberModel(5, 1, 50, 1)); // Valor inicial 5, min 1, max 50
+        painelControle.add(spinnerNumProcessos);
+
+        painelControle.add(new JLabel("Seed:"));
+        spinnerSeed = new JSpinner(new SpinnerNumberModel(42, 0, Integer.MAX_VALUE, 1)); // Valor inicial 42
+        painelControle.add(spinnerSeed);
+        // --- FIM DOS NOVOS CAMPOS ---
 
         btnIniciar = new JButton("Iniciar Simulação");
         painelControle.add(btnIniciar);
@@ -53,18 +65,27 @@ public class InterfaceGrafica extends JFrame {
     }
 
     private void iniciarSimulacao() {
+        // Desabilita todos os controles
         btnIniciar.setEnabled(false);
         comboAlgoritmo.setEnabled(false);
         spinnerQuantum.setEnabled(false);
+        spinnerNumProcessos.setEnabled(false); // <-- NOVO
+        spinnerSeed.setEnabled(false);         // <-- NOVO
 
-        List<Processo> cargaDeTrabalho = Avaliador.gerarCargaDeTrabalho(5);
+        // Lê os valores dos novos campos
+        int numProcessos = (int) spinnerNumProcessos.getValue();
+        int seed = (int) spinnerSeed.getValue();
+
+        // Gera a carga de trabalho usando os novos parâmetros
+        List<Processo> cargaDeTrabalho = Avaliador.gerarCargaDeTrabalho(numProcessos, seed);
         painelSimulacao.prepararParaSimulacao(cargaDeTrabalho);
 
         Escalonador.Algoritmo algoritmo = (Escalonador.Algoritmo) comboAlgoritmo.getSelectedItem();
         int quantum = (int) spinnerQuantum.getValue();
 
         // Nome do cenário para identificação
-        String nomeCenario = algoritmo.toString() + " (Q=" + quantum + "ms)";
+        String nomeCenario = String.format("%s (Q=%dms, P=%d, S=%d)",
+                algoritmo.toString(), quantum, numProcessos, seed);
 
         SwingWorker<Void, String> worker = new SwingWorker<>() {
             @Override
@@ -92,31 +113,31 @@ public class InterfaceGrafica extends JFrame {
                 };
 
                 Escalonador escalonador = new Escalonador(algoritmo, quantum, cargaDeTrabalho, callback);
-                // ou: new Escalonador(algoritmo, quantum, cargaDeTrabalho, callback, 8)  // overhead 8ms
-
                 escalonador.escalonar();
 
                 Avaliador avaliador = new Avaliador(
                         escalonador.getProcessos(),
-                        escalonador.getTempoTotal(),           // wall time total
+                        escalonador.getTempoTotal(),
                         escalonador.getTrocasContexto(),
                         escalonador.getTempoOverheadTotalMs(),
-                        escalonador.getCpuTotalNs()            // CPU real medida
+                        escalonador.getCpuTotalNs()
                 );
 
                 SwingUtilities.invokeLater(() ->
                         painelMetricas.exibirMetricas(avaliador, escalonador.getProcessos(), nomeCenario)
                 );
 
-
                 return null;
             }
 
             @Override
             protected void done() {
+                // Habilita os controles novamente
                 btnIniciar.setEnabled(true);
                 comboAlgoritmo.setEnabled(true);
                 spinnerQuantum.setEnabled(true);
+                spinnerNumProcessos.setEnabled(true); // <-- NOVO
+                spinnerSeed.setEnabled(true);         // <-- NOVO
                 painelSimulacao.adicionarLog("\n✓ SIMULAÇÃO CONCLUÍDA");
                 painelSimulacao.adicionarLog("Execute outro cenário para comparação\n");
             }
