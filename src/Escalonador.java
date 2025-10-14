@@ -51,6 +51,11 @@ public class Escalonador {
         }
     }
 
+    /**
+     * Função do método: Inicia o escalonamento dos processos conforme o algoritmo selecionado.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (executa escalonamento)
+     */
     public void escalonar() {
         inicioExecucao = System.currentTimeMillis();
         callback.onLog(String.format(
@@ -67,6 +72,11 @@ public class Escalonador {
         callback.onConcluido();
     }
 
+    /**
+     * Função do método: Executa o escalonamento por prioridade.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (executa escalonamento)
+     */
     private void escalonarPorPrioridade() {
         listaProcessos.sort(Comparator.comparingInt(Processo::getPrioridade).reversed());
         for (int i = 0; i < listaProcessos.size(); i++) {
@@ -76,6 +86,11 @@ public class Escalonador {
         }
     }
 
+    /**
+     * Função do método: Executa o escalonamento Round Robin.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (executa escalonamento)
+     */
     private void escalonarRoundRobin() {
         Queue<Processo> fila = new LinkedList<>(listaProcessos);
         while (!fila.isEmpty()) {
@@ -94,6 +109,11 @@ public class Escalonador {
         }
     }
 
+    /**
+     * Função do método: Executa uma fatia de tempo de um processo.
+     * Entrada: Processo, tempo de execução
+     * Saída: Nenhuma (atualiza estado do processo)
+     */
     private void executarProcesso(Processo p, int tempoExecucao) {
         p.pronto();
         callback.onLog(String.format("[P%d] PRONTO | Prioridade: %d", p.getIdProcesso(), p.getPrioridade()));
@@ -119,6 +139,11 @@ public class Escalonador {
         }
     }
 
+    /**
+     * Função do método: Aplica o overhead de troca de contexto.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (atualiza métricas)
+     */
     private void aplicarOverheadTroca() {
         if (overheadTrocaMs <= 0) return;
         try {
@@ -132,13 +157,43 @@ public class Escalonador {
     }
 
     // Getters de métricas
+    /**
+     * Função do método: Retorna o tempo total de execução da simulação.
+     * Entrada: Nenhuma
+     * Saída: Tempo total em ms
+     */
     public double getTempoTotal() { return fimExecucao - inicioExecucao; }
+    /**
+     * Função do método: Retorna o número de trocas de contexto realizadas.
+     * Entrada: Nenhuma
+     * Saída: Número de trocas de contexto
+     */
     public int getTrocasContexto() { return trocasContexto; }
+    /**
+     * Função do método: Retorna a lista de processos gerenciados.
+     * Entrada: Nenhuma
+     * Saída: Lista de processos
+     */
     public List<Processo> getProcessos() { return listaProcessos; }
 
+    /**
+     * Função do método: Retorna o tempo total de overhead de trocas de contexto.
+     * Entrada: Nenhuma
+     * Saída: Tempo de overhead em ms
+     */
     public long getTempoOverheadTotalMs() { return tempoOverheadTotalMs; }
+    /**
+     * Função do método: Retorna o tempo total ocioso reservado para futuras chegadas.
+     * Entrada: Nenhuma
+     * Saída: Tempo ocioso em ms
+     */
     public long getTempoOciosoTotalMs() { return tempoOciosoTotalMs; }
 
     /** CPU real total gasta executando as "partes CPU" das fatias (em nanos) */
+    /**
+     * Função do método: Retorna o tempo total de CPU real gasto pelo escalonador.
+     * Entrada: Nenhuma
+     * Saída: Tempo de CPU em nanossegundos
+     */
     public long getCpuTotalNs() { return cpuTotalNs; }
 }

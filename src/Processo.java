@@ -29,6 +29,11 @@ public class Processo {
         this.cpuIntensidade = 0.6 + ThreadLocalRandom.current().nextDouble() * 0.3; // 0.6–0.9
     }
 
+    /**
+     * Função do método: Define o estado do processo como PRONTO.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (atualiza estado)
+     */
     public synchronized void pronto() {
         this.estado = Estado.PRONTO;
     }
@@ -36,6 +41,11 @@ public class Processo {
     /**
      * Executa uma fatia (quantum). Retorna o tempo de CPU real gasto nesta chamada (em nanos),
      * medido via ThreadMXBean no thread que chama este método (o escalonador).
+     */
+    /**
+     * Função do método: Executa uma fatia do processo simulando CPU e I/O.
+     * Entrada: quantum, medidor de CPU
+     * Saída: Tempo de CPU real gasto (nanossegundos)
      */
     public synchronized long executar(int quantum, java.lang.management.ThreadMXBean medidor) {
         if (estado == Estado.FINALIZADO) return 0L;
@@ -92,32 +102,107 @@ public class Processo {
         return cpuGastoNs;
     }
 
+    /**
+     * Função do método: Define o estado do processo como SUSPENSO.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (atualiza estado)
+     */
     public synchronized void suspender() {
         this.estado = Estado.SUSPENSO;
     }
 
+    /**
+     * Função do método: Finaliza o processo e registra o tempo de finalização.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (atualiza estado e tempo)
+     */
     public synchronized void finalizar() {
         this.estado = Estado.FINALIZADO;
         this.tempoFinalizacao = System.currentTimeMillis();
     }
 
     // Getters básicos
+    /**
+     * Função do método: Retorna o ID do processo.
+     * Entrada: Nenhuma
+     * Saída: ID do processo
+     */
     public int getIdProcesso() { return id; }
+    /**
+     * Função do método: Retorna a prioridade do processo.
+     * Entrada: Nenhuma
+     * Saída: Prioridade
+     */
     public int getPrioridade() { return prioridade; }
+    /**
+     * Função do método: Retorna o tempo total de execução necessário.
+     * Entrada: Nenhuma
+     * Saída: Tempo de execução em ms
+     */
     public int getTempoExecucao() { return tempoExecucao; }
+    /**
+     * Função do método: Retorna o tempo já executado do processo.
+     * Entrada: Nenhuma
+     * Saída: Tempo executado em ms
+     */
     public synchronized int getTempoExecutado() { return tempoExecutado; }
+    /**
+     * Função do método: Retorna o estado atual do processo.
+     * Entrada: Nenhuma
+     * Saída: Estado do processo
+     */
     public synchronized Estado getEstado() { return estado; }
 
     // Métricas de timeline
+    /**
+     * Função do método: Retorna o tempo de chegada do processo.
+     * Entrada: Nenhuma
+     * Saída: Tempo de chegada (ms)
+     */
     public long getTempoChegada() { return tempoChegada; }
+    /**
+     * Função do método: Retorna o tempo de início da primeira execução.
+     * Entrada: Nenhuma
+     * Saída: Tempo de início (ms)
+     */
     public long getTempoInicioPrimeiraExecucao() { return tempoInicioPrimeiraExecucao; }
+    /**
+     * Função do método: Retorna o tempo de finalização do processo.
+     * Entrada: Nenhuma
+     * Saída: Tempo de finalização (ms)
+     */
     public long getTempoFinalizacao() { return tempoFinalizacao; }
+    /**
+     * Função do método: Calcula o tempo de retorno do processo.
+     * Entrada: Nenhuma
+     * Saída: Tempo de retorno (ms)
+     */
     public long getTempoDeRetorno() { return tempoFinalizacao - tempoChegada; }
+    /**
+     * Função do método: Calcula o tempo de espera do processo.
+     * Entrada: Nenhuma
+     * Saída: Tempo de espera (ms)
+     */
     public long getTempoDeEspera() { return getTempoDeRetorno() - tempoExecucao; }
+    /**
+     * Função do método: Calcula o tempo de resposta do processo.
+     * Entrada: Nenhuma
+     * Saída: Tempo de resposta (ms)
+     */
     public long getTempoDeResposta() { return tempoInicioPrimeiraExecucao - tempoChegada; }
 
     // Intensidade de CPU (0.0 a 1.0)
+    /**
+     * Função do método: Retorna a intensidade de CPU do processo.
+     * Entrada: Nenhuma
+     * Saída: Intensidade de CPU (0.0 a 1.0)
+     */
     public double getCpuIntensidade() { return cpuIntensidade; }
+    /**
+     * Função do método: Define a intensidade de CPU do processo.
+     * Entrada: Intensidade de CPU (double)
+     * Saída: Nenhuma (atualiza atributo)
+     */
     public void setCpuIntensidade(double cpuIntensidade) {
         this.cpuIntensidade = Math.max(0.0, Math.min(1.0, cpuIntensidade));
     }

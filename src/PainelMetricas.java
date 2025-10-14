@@ -40,6 +40,11 @@ public class PainelMetricas extends JPanel {
         add(tabbedPane, BorderLayout.CENTER);
     }
 
+    /**
+     * Função do método: Exibe as métricas de desempenho do cenário atual na interface.
+     * Entrada: avaliador, lista de processos, nome do cenário
+     * Saída: Nenhuma (atualiza interface)
+     */
     public void exibirMetricas(Avaliador avaliador, List<Processo> processos, String cenario) {
         // Armazena resultado do cenário atual (CORRIGIDO)
         resultadosAcumulados.put(cenario, new ResultadoSimulacao(avaliador, processos));
@@ -113,6 +118,11 @@ public class PainelMetricas extends JPanel {
         repaint();
     }
 
+    /**
+     * Função do método: Limpa as métricas exibidas na interface.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (atualiza interface)
+     */
     public void limpar() {
         areaResumo.setText("Aguardando simulação...");
         painelGantt.removeAll();
@@ -122,6 +132,11 @@ public class PainelMetricas extends JPanel {
         repaint();
     }
 
+    /**
+     * Função do método: Limpa o histórico de resultados acumulados e a interface.
+     * Entrada: Nenhuma
+     * Saída: Nenhuma (atualiza interface)
+     */
     public void limparHistorico() {
         resultadosAcumulados.clear();
         limpar();

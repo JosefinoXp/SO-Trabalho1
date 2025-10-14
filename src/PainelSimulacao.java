@@ -39,6 +39,11 @@ public class PainelSimulacao extends JPanel {
         coresProcessos = new HashMap<>();
     }
 
+    /**
+     * Função do método: Prepara o painel para uma nova simulação com a lista de processos.
+     * Entrada: Lista de processos
+     * Saída: Nenhuma (atualiza interface)
+     */
     public void prepararParaSimulacao(List<Processo> processos) {
         painelProcessos.removeAll();
         barrasDeProgresso.clear();
@@ -74,6 +79,11 @@ public class PainelSimulacao extends JPanel {
     }
 
     /** Gera uma cor única, suave e fixa para cada processo **/
+    /**
+     * Função do método: Gera cores únicas para cada processo.
+     * Entrada: Lista de processos
+     * Saída: Nenhuma (atualiza estrutura de cores)
+     */
     private void gerarCoresUnicas(List<Processo> processos) {
         Random rand = new Random();
         for (Processo p : processos) {
@@ -85,6 +95,11 @@ public class PainelSimulacao extends JPanel {
         }
     }
 
+    /**
+     * Função do método: Atualiza a interface do processo informado.
+     * Entrada: Processo
+     * Saída: Nenhuma (atualiza interface)
+     */
     public void atualizarProcesso(Processo p) {
         if (p == null) return;
 
@@ -113,6 +128,11 @@ public class PainelSimulacao extends JPanel {
         }
     }
 
+    /**
+     * Função do método: Adiciona uma mensagem ao log de execução.
+     * Entrada: Mensagem (String)
+     * Saída: Nenhuma (atualiza log)
+     */
     public void adicionarLog(String mensagem) {
         logArea.append(mensagem + "\n");
         logArea.setCaretPosition(logArea.getDocument().getLength());
