@@ -3,13 +3,13 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.function.Function;
 
 public class PainelMetricas extends JPanel {
     private JTabbedPane tabbedPane;
     private JTextArea areaResumo;
     private JPanel painelGantt;
-    private JPanel painelHistogramas;
+    private JPanel painelGraficosDeBarra; // Renomeado para clareza
     private JPanel painelComparativo;
 
     // Armazena resultados de múltiplas simulações para comparação
@@ -29,9 +29,9 @@ public class PainelMetricas extends JPanel {
         painelGantt = new JPanel(new BorderLayout());
         tabbedPane.addTab("Timeline/Gantt", painelGantt);
 
-        painelHistogramas = new JPanel();
-        painelHistogramas.setLayout(new BoxLayout(painelHistogramas, BoxLayout.Y_AXIS));
-        tabbedPane.addTab("Histogramas", new JScrollPane(painelHistogramas));
+        painelGraficosDeBarra = new JPanel();
+        painelGraficosDeBarra.setLayout(new BoxLayout(painelGraficosDeBarra, BoxLayout.Y_AXIS));
+        tabbedPane.addTab("Gráficos de Tempo", new JScrollPane(painelGraficosDeBarra)); // Nome da aba atualizado
 
         painelComparativo = new JPanel(new BorderLayout());
         tabbedPane.addTab("Comparativo de Cenários", painelComparativo);
@@ -58,15 +58,14 @@ public class PainelMetricas extends JPanel {
         painelGantt.removeAll();
         painelGantt.add(new JScrollPane(new GanttChartPanel(processos)), BorderLayout.CENTER);
 
-        // 3. Histogramas CORRETOS (com bins)
-        painelHistogramas.removeAll();
-        List<Long> temposRetorno = processos.stream().map(Processo::getTempoDeRetorno).collect(Collectors.toList());
-        List<Long> temposEspera = processos.stream().map(Processo::getTempoDeEspera).collect(Collectors.toList());
-        List<Long> temposResposta = processos.stream().map(Processo::getTempoDeResposta).collect(Collectors.toList());
+        // 3. Gráficos de Barra (CORRIGIDO)
+        painelGraficosDeBarra.removeAll();
+        // Ordena os processos por ID para consistência nos gráficos
+        processos.sort(Comparator.comparingInt(Processo::getIdProcesso));
 
-        painelHistogramas.add(new HistogramaPorBinsPanel(temposRetorno, "Histograma - Tempo de Retorno"));
-        painelHistogramas.add(new HistogramaPorBinsPanel(temposEspera, "Histograma - Tempo de Espera"));
-        painelHistogramas.add(new HistogramaPorBinsPanel(temposResposta, "Histograma - Tempo de Resposta"));
+        painelGraficosDeBarra.add(new GraficoBarrasPanel(processos, "Gráfico - Tempo de Retorno", Processo::getTempoDeRetorno));
+        painelGraficosDeBarra.add(new GraficoBarrasPanel(processos, "Gráfico - Tempo de Espera", Processo::getTempoDeEspera));
+        painelGraficosDeBarra.add(new GraficoBarrasPanel(processos, "Gráfico - Tempo de Resposta", Processo::getTempoDeResposta));
 
         // 4. Comparativo entre cenários
         painelComparativo.removeAll();
@@ -84,7 +83,7 @@ public class PainelMetricas extends JPanel {
     public void limpar() {
         areaResumo.setText("Aguardando simulação...");
         painelGantt.removeAll();
-        painelHistogramas.removeAll();
+        painelGraficosDeBarra.removeAll();
         painelComparativo.removeAll();
         revalidate();
         repaint();
@@ -109,6 +108,7 @@ public class PainelMetricas extends JPanel {
 
     // GANTT - mostra timeline de execução
     private static class GanttChartPanel extends JPanel {
+        // ... (código inalterado, pode manter como estava)
         private final List<Processo> processos;
         private long tempoMin, tempoMax;
         private final Color[] cores = {
@@ -183,15 +183,16 @@ public class PainelMetricas extends JPanel {
         }
     }
 
-    // HISTOGRAMA CORRETO - agrupa valores em bins
-    private static class HistogramaPorBinsPanel extends JPanel {
-        private final List<Long> dados;
+    // --- NOVA CLASSE PARA GRÁFICO DE BARRAS ---
+    private static class GraficoBarrasPanel extends JPanel {
+        private final List<Processo> processos;
         private final String titulo;
-        private final int numBins = 8;
+        private final Function<Processo, Long> extratorDeValor;
 
-        public HistogramaPorBinsPanel(List<Long> dados, String titulo) {
-            this.dados = dados;
+        public GraficoBarrasPanel(List<Processo> processos, String titulo, Function<Processo, Long> extratorDeValor) {
+            this.processos = processos;
             this.titulo = titulo;
+            this.extratorDeValor = extratorDeValor;
             setPreferredSize(new Dimension(500, 300));
             setBackground(Color.WHITE);
         }
@@ -202,34 +203,20 @@ public class PainelMetricas extends JPanel {
             Graphics2D g2d = (Graphics2D) g;
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            if (dados == null || dados.isEmpty()) {
+            if (processos == null || processos.isEmpty()) {
                 g2d.drawString(titulo + " (sem dados)", 10, 20);
                 return;
             }
 
-            long min = Collections.min(dados);
-            long max = Collections.max(dados);
-            if (max == min) max = min + 1;
-
-            // Criar bins
-            double binWidth = (double)(max - min) / numBins;
-            int[] frequencias = new int[numBins];
-
-            for (long valor : dados) {
-                int binIndex = Math.min((int)((valor - min) / binWidth), numBins - 1);
-                frequencias[binIndex]++;
-            }
-
-            int maxFreq = 0;
-            for (int f : frequencias) {
-                if (f > maxFreq) maxFreq = f;
-            }
-            if (maxFreq == 0) maxFreq = 1;
+            long maxValor = processos.stream()
+                    .mapToLong(extratorDeValor::apply)
+                    .max()
+                    .orElse(1L);
 
             int padL = 60, padR = 40, padT = 50, padB = 60;
             int larguraUtil = getWidth() - padL - padR;
             int alturaUtil = getHeight() - padT - padB;
-            double larguraBarra = (double)larguraUtil / numBins;
+            double larguraBarra = (double) larguraUtil / processos.size();
 
             // Título
             g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
@@ -240,40 +227,42 @@ public class PainelMetricas extends JPanel {
             g2d.drawLine(padL, getHeight() - padB, getWidth() - padR, getHeight() - padB); // X
             g2d.drawLine(padL, padT, padL, getHeight() - padB); // Y
 
-            // Barras
-            for (int i = 0; i < numBins; i++) {
-                int altBarra = (int)((double)frequencias[i] / maxFreq * alturaUtil);
-                int x = (int)(padL + i * larguraBarra);
+            // Barras e labels
+            for (int i = 0; i < processos.size(); i++) {
+                Processo p = processos.get(i);
+                long valor = extratorDeValor.apply(p);
+
+                int altBarra = (int) (((double) valor / maxValor) * alturaUtil);
+                int x = (int) (padL + i * larguraBarra);
                 int y = getHeight() - padB - altBarra;
 
+                // Desenha a barra
                 g2d.setColor(new Color(70, 130, 180));
-                g2d.fillRect(x + 2, y, (int)larguraBarra - 4, altBarra);
+                g2d.fillRect(x + 2, y, (int) larguraBarra - 4, altBarra);
                 g2d.setColor(Color.BLACK);
-                g2d.drawRect(x + 2, y, (int)larguraBarra - 4, altBarra);
+                g2d.drawRect(x + 2, y, (int) larguraBarra - 4, altBarra);
 
-                // Label do intervalo
-                long binStart = min + (long)(i * binWidth);
-                long binEnd = min + (long)((i + 1) * binWidth);
-                String label = String.format("%d-%d", binStart, binEnd);
-                g2d.setFont(new Font("SansSerif", Font.PLAIN, 9));
-                g2d.drawString(label, x + 5, getHeight() - padB + 15);
+                // Label do processo no eixo X
+                String labelProcesso = "P" + p.getIdProcesso();
+                g2d.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                g2d.drawString(labelProcesso, x + (int)larguraBarra/2 - 5, getHeight() - padB + 15);
 
-                // Frequência
-                if (frequencias[i] > 0) {
-                    g2d.drawString(String.valueOf(frequencias[i]), x + (int)larguraBarra/2 - 5, y - 5);
-                }
+                // Label do valor acima da barra
+                String labelValor = String.valueOf(valor);
+                g2d.drawString(labelValor, x + (int)larguraBarra/2 - 10, y - 5);
             }
 
             // Labels dos eixos
             g2d.setFont(new Font("SansSerif", Font.BOLD, 11));
-            g2d.drawString("Tempo (ms)", getWidth()/2 - 30, getHeight() - 10);
+            g2d.drawString("Processos", getWidth()/2 - 30, getHeight() - 10);
             g2d.rotate(-Math.PI/2);
-            g2d.drawString("Frequência", -getHeight()/2 - 30, 20);
+            g2d.drawString("Tempo (ms)", -getHeight()/2 - 30, 20);
         }
     }
 
-    // COMPARATIVO ENTRE CENÁRIOS - linha ou barras agrupadas
+    // COMPARATIVO ENTRE CENÁRIOS - (código inalterado, pode manter como estava)
     private static class ComparativoCenariosPanel extends JPanel {
+        // ... (código inalterado, pode manter como estava)
         private final Map<String, ResultadoSimulacao> resultados;
 
         public ComparativoCenariosPanel(Map<String, ResultadoSimulacao> resultados) {
