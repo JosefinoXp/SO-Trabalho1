@@ -1,9 +1,12 @@
-public class Processo extends Thread {
+import java.util.function.Consumer;
+
+public class Processo {
     private int id;
     private int prioridade;
     private int tempoExecucao;
     private int tempoExecutado;
     private Estado estado;
+    private Consumer<String> outputHandler = System.out::println;
 
     public enum Estado { PRONTO, EXECUCAO, SUSPENSO, FINALIZADO }
 
@@ -15,13 +18,15 @@ public class Processo extends Thread {
         this.estado = Estado.SUSPENSO;
     }
 
-    // Marca o processo como pronto
-    public synchronized void pronto() {
-        this.estado = Estado.PRONTO;
-        System.out.println("[Processo " + id + "] PRONTO para execução.");
+    public void setOutputHandler(Consumer<String> handler) {
+        this.outputHandler = handler;
     }
 
-    // Simula execução parcial (quantum)
+    public synchronized void pronto() {
+        this.estado = Estado.PRONTO;
+        outputHandler.accept(String.format("[P%d] PRONTO para execução.", id));
+    }
+
     public synchronized void executarQuantum(int quantum) {
         if (estado == Estado.FINALIZADO) return;
 
@@ -29,18 +34,17 @@ public class Processo extends Thread {
         int tempoRestante = tempoExecucao - tempoExecutado;
         int tempoParaExecutar = Math.min(quantum, tempoRestante);
 
-        System.out.println("[Processo " + id + "] EXECUTANDO por " + tempoParaExecutar + " ms (restam " + tempoRestante + " ms)");
+        outputHandler.accept(String.format("[P%d] EXECUTANDO por %d ms (restam %d ms)", id, tempoParaExecutar, tempoRestante));
 
         try {
-            Thread.sleep(tempoParaExecutar); // simula o tempo de execução
+            Thread.sleep(tempoParaExecutar);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
 
         tempoExecutado += tempoParaExecutar;
-
-        // Atualiza o estado após o quantum
         tempoRestante = tempoExecucao - tempoExecutado;
+
         if (tempoRestante > 0) {
             suspender();
         } else {
@@ -48,22 +52,19 @@ public class Processo extends Thread {
         }
     }
 
-    // Marca como suspenso
     public synchronized void suspender() {
         this.estado = Estado.SUSPENSO;
-        System.out.println("[Processo " + id + "] SUSPENSO (executou " + tempoExecutado + " / " + tempoExecucao + " ms)");
+        outputHandler.accept(String.format("[P%d] SUSPENSO (executou %d/%d ms)", id, tempoExecutado, tempoExecucao));
     }
 
-    // Marca como finalizado
     public synchronized void finalizar() {
         this.estado = Estado.FINALIZADO;
-        System.out.println("[Processo " + id + "] FINALIZADO\n");
+        outputHandler.accept(String.format("[P%d] FINALIZADO ✅\n", id));
     }
 
-    // Getters
-    public int getIdProcesso() { return this.id; }
-    public int getPrioridade() { return this.prioridade; }
-    public int getTempoExecucao() { return this.tempoExecucao; }
-    public int getTempoExecutado() { return this.tempoExecutado; }
-    public Estado getEstado() { return this.estado; }
+    public int getIdProcesso() { return id; }
+    public int getPrioridade() { return prioridade; }
+    public int getTempoExecucao() { return tempoExecucao; }
+    public int getTempoExecutado() { return tempoExecutado; }
+    public Estado getEstado() { return estado; }
 }
