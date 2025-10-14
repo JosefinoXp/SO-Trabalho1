@@ -5,104 +5,91 @@ public class Escalonador {
     private List<Processo> listaProcessos;
     private int quantum;
     private Algoritmo algoritmoSelecionado;
-    private Consumer<String> outputHandler = System.out::println;
+    private int trocasContexto;
+    private long inicioExecucao, fimExecucao;
+
+    // Callback para notificar a GUI
+    private Consumer<String> logCallback;
+    private Consumer<Processo> processoAtualCallback;
 
     public enum Algoritmo { PRIORIDADE, ROUND_ROBIN }
 
-    public Escalonador(Algoritmo algoritmo, int quantum) {
-        this.listaProcessos = new ArrayList<>();
+    public interface EscalonadorCallback {
+        void onLog(String message);
+        void onProcessoIniciado(Processo p);
+        void onProcessoFinalizado(Processo p);
+        void onConcluido();
+    }
+    private EscalonadorCallback callback;
+
+
+    public Escalonador(Algoritmo algoritmo, int quantum, List<Processo> processos, EscalonadorCallback callback) {
         this.algoritmoSelecionado = algoritmo;
-        this.quantum = Math.max(quantum, 1);
+        this.quantum = quantum;
+        this.listaProcessos = new ArrayList<>(processos);
+        this.callback = callback;
+        this.trocasContexto = 0;
     }
 
-    public void setOutputHandler(Consumer<String> handler) {
-        this.outputHandler = handler;
-    }
+    public void escalonar() {
+        inicioExecucao = System.currentTimeMillis();
+        callback.onLog(String.format("INICIANDO ESCALONAMENTO COM %s (Quantum: %dms)\n", algoritmoSelecionado, quantum));
 
-    public void adicionarProcesso(Processo processo) {
-        listaProcessos.add(processo);
-    }
-
-    public boolean listaVazia() {
-        return listaProcessos.isEmpty();
-    }
-
-    public synchronized void escalonar() {
         switch (algoritmoSelecionado) {
             case PRIORIDADE -> escalonarPorPrioridade();
             case ROUND_ROBIN -> escalonarRoundRobin();
         }
+
+        fimExecucao = System.currentTimeMillis();
+        callback.onConcluido();
     }
 
     private void escalonarPorPrioridade() {
-        outputHandler.accept("\n===== ESCALONAMENTO POR PRIORIDADE =====\n");
-        listaProcessos.sort((p1, p2) -> Integer.compare(p2.getPrioridade(), p1.getPrioridade()));
+        listaProcessos.sort(Comparator.comparingInt(Processo::getPrioridade).reversed());
 
         for (Processo p : listaProcessos) {
-            p.setOutputHandler(outputHandler);
-            p.pronto();
-
-            Thread t = new Thread(() -> p.executarQuantum(p.getTempoExecucao()));
-            t.start();
-            try {
-                t.join();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            executarProcesso(p, p.getTempoExecucao());
         }
-        aguardarConclusao();
-        outputHandler.accept("Escalonamento por PRIORIDADE concluído.\n");
     }
 
     private void escalonarRoundRobin() {
-        outputHandler.accept("\n===== ESCALONAMENTO ROUND ROBIN =====\n");
         Queue<Processo> fila = new LinkedList<>(listaProcessos);
 
         while (!fila.isEmpty()) {
-            Processo processoAtual = fila.poll();
+            Processo atual = fila.poll();
+            if (atual.getEstado() != Processo.Estado.FINALIZADO) {
+                executarProcesso(atual, quantum);
 
-            if (processoAtual.getEstado() != Processo.Estado.FINALIZADO) {
-                processoAtual.setOutputHandler(outputHandler);
-                processoAtual.pronto();
-
-                Thread t = new Thread(() -> processoAtual.executarQuantum(quantum));
-                t.start();
-
-                try {
-                    t.join();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-
-                if (processoAtual.getEstado() != Processo.Estado.FINALIZADO) {
-                    fila.add(processoAtual);
+                if (atual.getEstado() != Processo.Estado.FINALIZADO) {
+                    fila.add(atual);
                 }
             }
-            mostrarFila(fila);
         }
-
-        outputHandler.accept("\nEscalonamento ROUND ROBIN concluído.\n");
     }
 
-    private void mostrarFila(Queue<Processo> fila) {
-        StringBuilder sb = new StringBuilder("Fila atual: [ ");
-        for (Processo p : fila) {
-            sb.append("P").append(p.getIdProcesso()).append(" ");
+    private void executarProcesso(Processo p, int tempoExecucao) {
+        p.pronto();
+        callback.onLog(String.format("[P%d] PRONTO | Prioridade: %d", p.getIdProcesso(), p.getPrioridade()));
+        callback.onProcessoIniciado(p);
+
+        int tempoExecutadoAntes = p.getTempoExecutado();
+        p.executar(tempoExecucao);
+        int tempoExecutadoAgora = p.getTempoExecutado() - tempoExecutadoAntes;
+        trocasContexto++;
+
+        callback.onLog(String.format("[P%d] EXECUTOU por %dms | Total: %d/%dms",
+                p.getIdProcesso(), tempoExecutadoAgora, p.getTempoExecutado(), p.getTempoExecucao()));
+
+        if (p.getEstado() == Processo.Estado.FINALIZADO) {
+            callback.onLog(String.format("[P%d] FINALIZADO\n", p.getIdProcesso()));
+            callback.onProcessoFinalizado(p);
+        } else {
+            callback.onLog(String.format("[P%d] SUSPENSO", p.getIdProcesso()));
         }
-        sb.append("]");
-        outputHandler.accept(sb.toString());
     }
 
-    private void aguardarConclusao() {
-        boolean todosFinalizados;
-        do {
-            todosFinalizados = listaProcessos.stream()
-                    .allMatch(p -> p.getEstado() == Processo.Estado.FINALIZADO);
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        } while (!todosFinalizados);
-    }
+    // Getters
+    public double getTempoTotal() { return fimExecucao - inicioExecucao; }
+    public int getTrocasContexto() { return trocasContexto; }
+    public List<Processo> getProcessos() { return listaProcessos; }
 }
