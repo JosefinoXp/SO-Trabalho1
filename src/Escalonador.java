@@ -4,6 +4,8 @@ public class Escalonador {
     private List<Processo> listaProcessos;
     private int quantum;
     private Algoritmo algoritmoSelecionado;
+    private int trocasContexto;
+    private long inicioExecucao, fimExecucao;
 
     public enum Algoritmo { PRIORIDADE, ROUND_ROBIN }
 
@@ -11,104 +13,81 @@ public class Escalonador {
         this.listaProcessos = new ArrayList<>();
         this.algoritmoSelecionado = algoritmo;
         this.quantum = quantum;
+        this.trocasContexto = 0;
     }
 
-    public void adicionarProcesso(Processo processo) {
-        listaProcessos.add(processo);
+    public void adicionarProcesso(Processo p) {
+        listaProcessos.add(p);
     }
 
-    // Método principal de escalonamento
     public synchronized void escalonar() {
-        switch (algoritmoSelecionado) {
-            case PRIORIDADE:
-                escalonarPorPrioridade();
-                break;
-            case ROUND_ROBIN:
-                escalonarRoundRobin();
-                break;
+        inicioExecucao = System.currentTimeMillis();
+
+        System.out.println("\n==============================");
+        System.out.println(" INICIANDO ESCALONAMENTO");
+        System.out.println("==============================");
+        System.out.println("Algoritmo: " + algoritmoSelecionado);
+        System.out.println("Quantum: " + quantum + " ms");
+        System.out.println("Processos carregados:");
+
+        for (Processo p : listaProcessos) {
+            System.out.printf(" - P%d | Prioridade: %d | Tempo Execucao: %d ms%n",
+                    p.getIdProcesso(), p.getPrioridade(), p.getTempoExecucao());
         }
+        System.out.println("--------------------------------\n");
+
+        switch (algoritmoSelecionado) {
+            case PRIORIDADE -> escalonarPorPrioridade();
+            case ROUND_ROBIN -> escalonarRoundRobin();
+        }
+
+        fimExecucao = System.currentTimeMillis();
+
+        System.out.println("\n========================================");
+        System.out.println("  ESCALONAMENTO CONCLUIDO");
+        System.out.println("========================================");
+        System.out.printf("Tempo total: %.2f s%n", (fimExecucao - inicioExecucao) / 1000.0);
+        System.out.println("Trocas de contexto: " + trocasContexto);
+        System.out.println("Processos finalizados:");
+        for (Processo p : listaProcessos) {
+            System.out.printf(" - P%d | Executado: %d/%d ms | Estado final: %s%n",
+                    p.getIdProcesso(), p.getTempoExecutado(), p.getTempoExecucao(), p.getEstado());
+        }
+        System.out.println("========================================\n");
     }
 
-    // Escalonamento por prioridade
     private void escalonarPorPrioridade() {
-        System.out.println("\n===== ESCALONAMENTO POR PRIORIDADE =====\n");
-
-        // Ordena pela prioridade (maior primeiro)
+        System.out.println("=== ESCALONAMENTO POR PRIORIDADE ===");
         listaProcessos.sort((p1, p2) -> Integer.compare(p2.getPrioridade(), p1.getPrioridade()));
 
-        // Inicia todas as threads (concorrência real)
         for (Processo p : listaProcessos) {
             p.pronto();
             Thread t = new Thread(() -> p.executarQuantum(p.getTempoExecucao()));
             t.start();
-            try {
-                t.join(); // Espera o processo terminar antes de iniciar o próximo
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            try { t.join(); } catch (InterruptedException e) { e.printStackTrace(); }
+            trocasContexto++;
         }
-
-        // Aguarda todos finalizarem
-        aguardarConclusao();
-        System.out.println("Escalonamento por PRIORIDADE concluído.\n");
     }
 
-    // Escalonamento Round Robin com quantum
     private void escalonarRoundRobin() {
-        System.out.println("\n===== ESCALONAMENTO ROUND ROBIN =====\n");
-
+        System.out.println("=== ESCALONAMENTO ROUND ROBIN ===");
         Queue<Processo> fila = new LinkedList<>(listaProcessos);
 
-        // Continua até todos os processos finalizarem
         while (!fila.isEmpty()) {
-            Processo processoAtual = fila.poll();
-
-            if (processoAtual.getEstado() != Processo.Estado.FINALIZADO) {
-                processoAtual.pronto();
-
-                // Cria thread para executar um quantum
-                Thread t = new Thread(() -> processoAtual.executarQuantum(quantum));
+            Processo atual = fila.poll();
+            if (atual.getEstado() != Processo.Estado.FINALIZADO) {
+                atual.pronto();
+                Thread t = new Thread(() -> atual.executarQuantum(quantum));
                 t.start();
-
-                try {
-                    t.join(); // espera o quantum terminar
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                // Se ainda resta tempo, retorna o processo à fila
-                if (processoAtual.getEstado() != Processo.Estado.FINALIZADO) {
-                    fila.add(processoAtual);
-                }
+                try { t.join(); } catch (InterruptedException e) { e.printStackTrace(); }
+                trocasContexto++;
+                if (atual.getEstado() != Processo.Estado.FINALIZADO)
+                    fila.add(atual);
             }
-
-            // Log visual do estado da fila
-            mostrarFila(fila);
         }
-
-        System.out.println("\nEscalonamento ROUND ROBIN concluído.\n");
     }
 
-    // Mostra a fila atual
-    private void mostrarFila(Queue<Processo> fila) {
-        System.out.print("Fila atual: [ ");
-        for (Processo p : fila) {
-            System.out.print("P" + p.getIdProcesso() + " ");
-        }
-        System.out.println("]");
-    }
-
-    // Aguarda até que todos os processos estejam finalizados
-    private void aguardarConclusao() {
-        boolean todosFinalizados;
-        do {
-            todosFinalizados = listaProcessos.stream()
-                    .allMatch(p -> p.getEstado() == Processo.Estado.FINALIZADO);
-            try {
-                Thread.sleep(300);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        } while (!todosFinalizados);
-    }
+    public double getTempoTotal() { return fimExecucao - inicioExecucao; }
+    public int getTrocasContexto() { return trocasContexto; }
+    public List<Processo> getProcessos() { return listaProcessos; }
 }

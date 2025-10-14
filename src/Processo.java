@@ -15,13 +15,14 @@ public class Processo extends Thread {
         this.estado = Estado.SUSPENSO;
     }
 
-    // Marca o processo como pronto
+    // Define como PRONTO
     public synchronized void pronto() {
         this.estado = Estado.PRONTO;
-        System.out.println("[Processo " + id + "] PRONTO para execução.");
+        System.out.printf("[Processo %d] PRONTO | Prioridade: %d | Tempo Total: %d ms%n",
+                id, prioridade, tempoExecucao);
     }
 
-    // Simula execução parcial (quantum)
+    // Executa um quantum
     public synchronized void executarQuantum(int quantum) {
         if (estado == Estado.FINALIZADO) return;
 
@@ -29,17 +30,17 @@ public class Processo extends Thread {
         int tempoRestante = tempoExecucao - tempoExecutado;
         int tempoParaExecutar = Math.min(quantum, tempoRestante);
 
-        System.out.println("[Processo " + id + "] EXECUTANDO por " + tempoParaExecutar + " ms (restam " + tempoRestante + " ms)");
+        System.out.printf("[Processo %d] EXECUCAO | Prioridade: %d | Quantum: %d ms | Restante: %d ms%n",
+                id, prioridade, tempoParaExecutar, tempoRestante);
 
         try {
-            Thread.sleep(tempoParaExecutar); // simula o tempo de execução
+            Thread.sleep(tempoParaExecutar);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
         tempoExecutado += tempoParaExecutar;
 
-        // Atualiza o estado após o quantum
         tempoRestante = tempoExecucao - tempoExecutado;
         if (tempoRestante > 0) {
             suspender();
@@ -48,22 +49,22 @@ public class Processo extends Thread {
         }
     }
 
-    // Marca como suspenso
     public synchronized void suspender() {
         this.estado = Estado.SUSPENSO;
-        System.out.println("[Processo " + id + "] SUSPENSO (executou " + tempoExecutado + " / " + tempoExecucao + " ms)");
+        System.out.printf("[Processo %d] SUSPENSO | Executado: %d/%d ms%n",
+                id, tempoExecutado, tempoExecucao);
     }
 
-    // Marca como finalizado
     public synchronized void finalizar() {
         this.estado = Estado.FINALIZADO;
-        System.out.println("[Processo " + id + "] FINALIZADO\n");
+        System.out.printf("[Processo %d] FINALIZADO | Tempo total executado: %d ms%n%n",
+                id, tempoExecutado);
     }
 
     // Getters
-    public int getIdProcesso() { return this.id; }
-    public int getPrioridade() { return this.prioridade; }
-    public int getTempoExecucao() { return this.tempoExecucao; }
-    public int getTempoExecutado() { return this.tempoExecutado; }
-    public Estado getEstado() { return this.estado; }
+    public int getIdProcesso() { return id; }
+    public int getPrioridade() { return prioridade; }
+    public int getTempoExecucao() { return tempoExecucao; }
+    public int getTempoExecutado() { return tempoExecutado; }
+    public Estado getEstado() { return estado; }
 }
