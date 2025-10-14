@@ -1,19 +1,19 @@
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.util.*;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.stream.Collectors;
-import java.util.Collections;
 
 public class PainelMetricas extends JPanel {
-
     private JTabbedPane tabbedPane;
     private JTextArea areaResumo;
     private JPanel painelGantt;
     private JPanel painelHistogramas;
     private JPanel painelComparativo;
+
+    // Armazena resultados de múltiplas simulações para comparação
+    private Map<String, ResultadoSimulacao> resultadosAcumulados = new HashMap<>();
 
     public PainelMetricas() {
         setLayout(new BorderLayout());
@@ -21,31 +21,31 @@ public class PainelMetricas extends JPanel {
 
         tabbedPane = new JTabbedPane();
 
-        // Aba 1: Resumo
         areaResumo = new JTextArea("Aguardando simulação...");
         areaResumo.setEditable(false);
         areaResumo.setFont(new Font("Monospaced", Font.PLAIN, 14));
         tabbedPane.addTab("Resumo", new JScrollPane(areaResumo));
 
-        // Aba 2: Gráfico de Gantt
         painelGantt = new JPanel(new BorderLayout());
-        tabbedPane.addTab("Gráfico de Gantt", painelGantt);
+        tabbedPane.addTab("Timeline/Gantt", painelGantt);
 
-        // Aba 3: Histogramas
         painelHistogramas = new JPanel();
         painelHistogramas.setLayout(new BoxLayout(painelHistogramas, BoxLayout.Y_AXIS));
-        tabbedPane.addTab("Histogramas de Tempo", new JScrollPane(painelHistogramas));
+        tabbedPane.addTab("Histogramas", new JScrollPane(painelHistogramas));
 
-        // Aba 4: Comparativo
         painelComparativo = new JPanel(new BorderLayout());
-        tabbedPane.addTab("Comparativo de Métricas", painelComparativo);
+        tabbedPane.addTab("Comparativo de Cenários", painelComparativo);
 
         add(tabbedPane, BorderLayout.CENTER);
     }
 
-    public void exibirMetricas(Avaliador avaliador, List<Processo> processos) {
-        // 1. Preencher Resumo
+    public void exibirMetricas(Avaliador avaliador, List<Processo> processos, String cenario) {
+        // Armazena resultado do cenário atual
+        resultadosAcumulados.put(cenario, new ResultadoSimulacao(avaliador, processos));
+
+        // 1. Resumo
         StringBuilder sb = new StringBuilder();
+        sb.append(String.format("=== CENÁRIO: %s ===\n\n", cenario));
         sb.append(String.format("Throughput: %.2f processos/s\n", avaliador.getThroughput()));
         sb.append(String.format("Trocas de Contexto: %d\n", avaliador.getTrocasDeContexto()));
         sb.append(String.format("Utilização da CPU: %.2f %%\n\n", avaliador.getUtilizacaoCPU()));
@@ -54,24 +54,28 @@ public class PainelMetricas extends JPanel {
         sb.append(String.format("Tempo Médio de Resposta: %.2f ms\n", avaliador.getTempoMedioDeResposta()));
         areaResumo.setText(sb.toString());
 
-        // 2. Preencher Gráfico de Gantt
+        // 2. Gantt
         painelGantt.removeAll();
         painelGantt.add(new JScrollPane(new GanttChartPanel(processos)), BorderLayout.CENTER);
 
-        // 3. Preencher Histogramas
+        // 3. Histogramas CORRETOS (com bins)
         painelHistogramas.removeAll();
         List<Long> temposRetorno = processos.stream().map(Processo::getTempoDeRetorno).collect(Collectors.toList());
         List<Long> temposEspera = processos.stream().map(Processo::getTempoDeEspera).collect(Collectors.toList());
         List<Long> temposResposta = processos.stream().map(Processo::getTempoDeResposta).collect(Collectors.toList());
 
-        painelHistogramas.add(new HistogramPanel(temposRetorno, "Histograma - Tempo de Retorno (ms)"));
-        painelHistogramas.add(new HistogramPanel(temposEspera, "Histograma - Tempo de Espera (ms)"));
-        painelHistogramas.add(new HistogramPanel(temposResposta, "Histograma - Tempo de Resposta (ms)"));
+        painelHistogramas.add(new HistogramaPorBinsPanel(temposRetorno, "Histograma - Tempo de Retorno"));
+        painelHistogramas.add(new HistogramaPorBinsPanel(temposEspera, "Histograma - Tempo de Espera"));
+        painelHistogramas.add(new HistogramaPorBinsPanel(temposResposta, "Histograma - Tempo de Resposta"));
 
-        // 4. Preencher Gráfico Comparativo
+        // 4. Comparativo entre cenários
         painelComparativo.removeAll();
-        painelComparativo.add(new BarChartPanel(avaliador), BorderLayout.CENTER);
-
+        if (resultadosAcumulados.size() > 1) {
+            painelComparativo.add(new ComparativoCenariosPanel(resultadosAcumulados), BorderLayout.CENTER);
+        } else {
+            JLabel lblAguardando = new JLabel("Execute múltiplos cenários para comparação", SwingConstants.CENTER);
+            painelComparativo.add(lblAguardando, BorderLayout.CENTER);
+        }
 
         revalidate();
         repaint();
@@ -86,39 +90,44 @@ public class PainelMetricas extends JPanel {
         repaint();
     }
 
-    // --- PAINÉIS DE GRÁFICOS CUSTOMIZADOS ---
+    public void limparHistorico() {
+        resultadosAcumulados.clear();
+        limpar();
+    }
 
-    /** Gráfico de Gantt (sem alterações, apenas movido para dentro da classe) */
+    // ========== CLASSES INTERNAS ==========
+
+    private static class ResultadoSimulacao {
+        Avaliador avaliador;
+        List<Processo> processos;
+
+        ResultadoSimulacao(Avaliador av, List<Processo> procs) {
+            this.avaliador = av;
+            this.processos = new ArrayList<>(procs);
+        }
+    }
+
+    // GANTT - mostra timeline de execução
     private static class GanttChartPanel extends JPanel {
         private final List<Processo> processos;
-        private long tempoMinimo = -1;
-        private long tempoMaximo = -1;
-
+        private long tempoMin, tempoMax;
         private final Color[] cores = {
-                new Color(110, 178, 255), new Color(111, 219, 146), new Color(255, 178, 110),
-                new Color(255, 110, 110), new Color(178, 110, 255), new Color(245, 245, 122)
+                new Color(110, 178, 255), new Color(111, 219, 146),
+                new Color(255, 178, 110), new Color(255, 110, 110),
+                new Color(178, 110, 255), new Color(245, 245, 122)
         };
 
         public GanttChartPanel(List<Processo> processos) {
             this.processos = new ArrayList<>(processos);
             this.processos.sort(Comparator.comparingInt(Processo::getIdProcesso));
             setBackground(Color.WHITE);
-            calcularLimitesDeTempo();
+            calcularLimites();
         }
 
-        private void calcularLimitesDeTempo() {
+        private void calcularLimites() {
             if (processos.isEmpty()) return;
-
-            tempoMinimo = processos.stream()
-                    .mapToLong(Processo::getTempoChegada)
-                    .min()
-                    .orElse(0);
-
-            tempoMaximo = processos.stream()
-                    .filter(p -> p.getEstado() == Processo.Estado.FINALIZADO)
-                    .mapToLong(Processo::getTempoFinalizacao)
-                    .max()
-                    .orElse(tempoMinimo);
+            tempoMin = processos.stream().mapToLong(Processo::getTempoChegada).min().orElse(0);
+            tempoMax = processos.stream().mapToLong(Processo::getTempoFinalizacao).max().orElse(tempoMin);
         }
 
         @Override
@@ -127,71 +136,63 @@ public class PainelMetricas extends JPanel {
             Graphics2D g2d = (Graphics2D) g;
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            if (processos.isEmpty() || tempoMaximo <= tempoMinimo) {
-                g2d.drawString("Não há dados para exibir.", 20, 30);
+            if (processos.isEmpty() || tempoMax <= tempoMin) {
+                g2d.drawString("Sem dados", 20, 30);
                 return;
             }
 
-            int paddingEsquerda = 80;
-            int paddingDireita = 30;
-            int paddingTop = 30;
-            int paddingBottom = 40;
-            int alturaBarra = 30;
-            int espacoEntreBarras = 15;
+            int padL = 80, padR = 30, padT = 30, padB = 40;
+            int alturaBarra = 30, espaco = 15;
+            int larguraUtil = getWidth() - padL - padR;
+            long duracao = tempoMax - tempoMin;
 
-            int areaDesenhoWidth = getWidth() - paddingEsquerda - paddingDireita;
-            long duracaoTotal = tempoMaximo - tempoMinimo;
-
-            int y = paddingTop;
+            int y = padT;
             for (int i = 0; i < processos.size(); i++) {
                 Processo p = processos.get(i);
                 g2d.setColor(Color.BLACK);
-                g2d.drawString("Processo " + p.getIdProcesso(), 10, y + alturaBarra / 2 + 5);
+                g2d.drawString("P" + p.getIdProcesso(), 10, y + alturaBarra/2 + 5);
 
                 if (p.getTempoInicioPrimeiraExecucao() != -1) {
-                    long inicioRelativo = p.getTempoInicioPrimeiraExecucao() - tempoMinimo;
-                    long fimRelativo = p.getTempoFinalizacao() - tempoMinimo;
+                    long inicio = p.getTempoInicioPrimeiraExecucao() - tempoMin;
+                    long fim = p.getTempoFinalizacao() - tempoMin;
 
-                    int xBarra = paddingEsquerda + (int) (areaDesenhoWidth * inicioRelativo / duracaoTotal);
-                    int larguraBarra = (int) (areaDesenhoWidth * (fimRelativo - inicioRelativo) / duracaoTotal);
-                    if (larguraBarra == 0) larguraBarra = 1;
+                    int x = padL + (int)(larguraUtil * inicio / duracao);
+                    int w = Math.max(1, (int)(larguraUtil * (fim - inicio) / duracao));
 
                     g2d.setColor(cores[i % cores.length]);
-                    g2d.fillRect(xBarra, y, larguraBarra, alturaBarra);
+                    g2d.fillRect(x, y, w, alturaBarra);
                     g2d.setColor(Color.DARK_GRAY);
-                    g2d.drawRect(xBarra, y, larguraBarra, alturaBarra);
+                    g2d.drawRect(x, y, w, alturaBarra);
                 }
-                y += alturaBarra + espacoEntreBarras;
+                y += alturaBarra + espaco;
             }
-            setPreferredSize(new Dimension(getWidth(), y + paddingBottom));
 
+            setPreferredSize(new Dimension(getWidth(), y + padB));
+
+            // Eixo do tempo
             int yEixo = y;
             g2d.setColor(Color.BLACK);
-            g2d.drawLine(paddingEsquerda, yEixo, getWidth() - paddingDireita, yEixo);
+            g2d.drawLine(padL, yEixo, getWidth() - padR, yEixo);
 
-            int numMarcadores = 5;
-            for (int i = 0; i <= numMarcadores; i++) {
-                long tempoMarcador = tempoMinimo + (i * duracaoTotal / numMarcadores);
-                int xMarcador = paddingEsquerda + (int) (i * (double)areaDesenhoWidth / numMarcadores);
-
-                g2d.drawLine(xMarcador, yEixo, xMarcador, yEixo + 5);
-                String labelTempo = String.format("%.1fs", (tempoMarcador - tempoMinimo) / 1000.0);
-                g2d.drawString(labelTempo, xMarcador - 15, yEixo + 20);
+            for (int i = 0; i <= 5; i++) {
+                long tempo = tempoMin + (i * duracao / 5);
+                int x = padL + (int)(i * larguraUtil / 5.0);
+                g2d.drawLine(x, yEixo, x, yEixo + 5);
+                g2d.drawString(String.format("%.1fs", (tempo - tempoMin)/1000.0), x - 15, yEixo + 20);
             }
         }
     }
 
-    /** CORRIGIDO: Painel para desenhar Histogramas */
-    private static class HistogramPanel extends JPanel {
-        private final List<Long> data;
-        private final String title;
-        private final int BINS = 10;
+    // HISTOGRAMA CORRETO - agrupa valores em bins
+    private static class HistogramaPorBinsPanel extends JPanel {
+        private final List<Long> dados;
+        private final String titulo;
+        private final int numBins = 8;
 
-        public HistogramPanel(List<Long> data, String title) {
-            this.data = data;
-            this.title = title;
-            setPreferredSize(new Dimension(400, 300));
-            setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
+        public HistogramaPorBinsPanel(List<Long> dados, String titulo) {
+            this.dados = dados;
+            this.titulo = titulo;
+            setPreferredSize(new Dimension(500, 300));
             setBackground(Color.WHITE);
         }
 
@@ -201,69 +202,82 @@ public class PainelMetricas extends JPanel {
             Graphics2D g2d = (Graphics2D) g;
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            // Validação dos dados
-            if (data == null || data.isEmpty() || Collections.min(data).equals(Collections.max(data))) {
-                String message = title + " (Dados insuficientes)";
-                FontMetrics metrics = g2d.getFontMetrics();
-                int x = (getWidth() - metrics.stringWidth(message)) / 2;
-                int y = getHeight() / 2;
-                g2d.drawString(message, x, y);
+            if (dados == null || dados.isEmpty()) {
+                g2d.drawString(titulo + " (sem dados)", 10, 20);
                 return;
             }
 
-            long min = Collections.min(data);
-            long max = Collections.max(data);
+            long min = Collections.min(dados);
+            long max = Collections.max(dados);
+            if (max == min) max = min + 1;
 
-            int[] bins = new int[BINS];
-            double binSize = (double) (max - min) / BINS;
+            // Criar bins
+            double binWidth = (double)(max - min) / numBins;
+            int[] frequencias = new int[numBins];
 
-            for (Long value : data) {
-                int binIndex = (int) ((value - min) / binSize);
-                if (value.equals(max)) { // O valor máximo deve cair no último bin
-                    binIndex = BINS - 1;
-                }
-                if (binIndex >= 0 && binIndex < BINS) {
-                    bins[binIndex]++;
-                }
+            for (long valor : dados) {
+                int binIndex = Math.min((int)((valor - min) / binWidth), numBins - 1);
+                frequencias[binIndex]++;
             }
 
-            int maxCount = 0;
-            for (int count : bins) {
-                if (count > maxCount) maxCount = count;
+            int maxFreq = 0;
+            for (int f : frequencias) {
+                if (f > maxFreq) maxFreq = f;
             }
+            if (maxFreq == 0) maxFreq = 1;
 
-            int padding = 40;
-            int width = getWidth() - 2 * padding;
-            int height = getHeight() - 2 * padding;
+            int padL = 60, padR = 40, padT = 50, padB = 60;
+            int larguraUtil = getWidth() - padL - padR;
+            int alturaUtil = getHeight() - padT - padB;
+            double larguraBarra = (double)larguraUtil / numBins;
 
-            // Desenha eixos
-            g2d.drawLine(padding, getHeight() - padding, padding, padding);
-            g2d.drawLine(padding, getHeight() - padding, getWidth() - padding, getHeight() - padding);
+            // Título
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
+            g2d.drawString(titulo, padL, 30);
 
-            // Desenha título e rótulos dos eixos
-            g2d.drawString(title, padding, padding - 20);
-            g2d.drawString("Contagem", padding - 35, padding - 5);
-            g2d.drawString(String.valueOf(maxCount), padding - 25, padding + 5);
-            g2d.drawString("0", padding - 15, getHeight() - padding + 5);
+            // Eixos
+            g2d.setColor(Color.BLACK);
+            g2d.drawLine(padL, getHeight() - padB, getWidth() - padR, getHeight() - padB); // X
+            g2d.drawLine(padL, padT, padL, getHeight() - padB); // Y
 
-            // Desenha barras
-            double barWidth = (double) width / BINS;
-            for (int i = 0; i < BINS; i++) {
-                int barHeight = (maxCount == 0) ? 0 : (int) (((double) bins[i] / maxCount) * height);
-                int x = (int) (padding + i * barWidth);
-                int y = getHeight() - padding - barHeight;
+            // Barras
+            for (int i = 0; i < numBins; i++) {
+                int altBarra = (int)((double)frequencias[i] / maxFreq * alturaUtil);
+                int x = (int)(padL + i * larguraBarra);
+                int y = getHeight() - padB - altBarra;
+
                 g2d.setColor(new Color(70, 130, 180));
-                g2d.fillRect(x, y, (int) barWidth - 2, barHeight); // -2 para criar um espaçamento
+                g2d.fillRect(x + 2, y, (int)larguraBarra - 4, altBarra);
+                g2d.setColor(Color.BLACK);
+                g2d.drawRect(x + 2, y, (int)larguraBarra - 4, altBarra);
+
+                // Label do intervalo
+                long binStart = min + (long)(i * binWidth);
+                long binEnd = min + (long)((i + 1) * binWidth);
+                String label = String.format("%d-%d", binStart, binEnd);
+                g2d.setFont(new Font("SansSerif", Font.PLAIN, 9));
+                g2d.drawString(label, x + 5, getHeight() - padB + 15);
+
+                // Frequência
+                if (frequencias[i] > 0) {
+                    g2d.drawString(String.valueOf(frequencias[i]), x + (int)larguraBarra/2 - 5, y - 5);
+                }
             }
+
+            // Labels dos eixos
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 11));
+            g2d.drawString("Tempo (ms)", getWidth()/2 - 30, getHeight() - 10);
+            g2d.rotate(-Math.PI/2);
+            g2d.drawString("Frequência", -getHeight()/2 - 30, 20);
         }
     }
 
-    /** CORRIGIDO: Painel para Gráfico de Barras Comparativo (movido para dentro da classe) */
-    private static class BarChartPanel extends JPanel {
-        private final Avaliador avaliador;
+    // COMPARATIVO ENTRE CENÁRIOS - linha ou barras agrupadas
+    private static class ComparativoCenariosPanel extends JPanel {
+        private final Map<String, ResultadoSimulacao> resultados;
 
-        public BarChartPanel(Avaliador avaliador) {
-            this.avaliador = avaliador;
+        public ComparativoCenariosPanel(Map<String, ResultadoSimulacao> resultados) {
+            this.resultados = resultados;
             setBackground(Color.WHITE);
         }
 
@@ -273,43 +287,97 @@ public class PainelMetricas extends JPanel {
             Graphics2D g2d = (Graphics2D) g;
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            double[] values = {
-                    avaliador.getTempoMedioDeRetorno(),
-                    avaliador.getTempoMedioDeEspera(),
-                    avaliador.getTempoMedioDeResposta()
-            };
-            String[] labels = {"Retorno", "Espera", "Resposta"};
-            Color[] colors = {new Color(255, 99, 132), new Color(54, 162, 235), new Color(255, 206, 86)};
-
-            double maxValue = 0;
-            for(double v : values) {
-                if (v > maxValue) maxValue = v;
-            }
-
-            if (maxValue == 0) {
-                g2d.drawString("Não há dados para exibir.", 20, 30);
+            if (resultados.size() < 2) {
+                g2d.drawString("Execute ao menos 2 cenários para comparação", 20, 30);
                 return;
             }
 
-            int padding = 40;
-            int width = getWidth() - 2 * padding;
-            int height = getHeight() - 2 * padding;
-            int barWidth = width / values.length / 2;
+            String[] metricas = {"Throughput", "Retorno (ms)", "Espera (ms)", "Resposta (ms)", "Trocas Ctx"};
+            int numMetricas = metricas.length;
+            int numCenarios = resultados.size();
 
-            for (int i = 0; i < values.length; i++) {
-                int barHeight = (int) ((values[i] / maxValue) * height);
-                int x = padding + (width / (values.length * 2)) * (i * 2 + 1);
-                int y = getHeight() - padding - barHeight;
+            int padL = 80, padR = 40, padT = 60, padB = 80;
+            int larguraUtil = getWidth() - padL - padR;
+            int alturaUtil = getHeight() - padT - padB;
 
-                g2d.setColor(colors[i]);
-                g2d.fillRect(x - barWidth/2, y, barWidth, barHeight);
+            double larguraGrupo = (double)larguraUtil / numMetricas;
+            double larguraBarra = larguraGrupo / (numCenarios + 1);
+
+            // Título
+            g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
+            g2d.drawString("Comparação de Métricas por Cenário", padL, 30);
+
+            // Eixos
+            g2d.setColor(Color.BLACK);
+            g2d.drawLine(padL, getHeight() - padB, getWidth() - padR, getHeight() - padB);
+            g2d.drawLine(padL, padT, padL, getHeight() - padB);
+
+            Color[] coresCenarios = {Color.RED, Color.BLUE, Color.GREEN, Color.ORANGE, Color.MAGENTA};
+            List<String> nomeCenarios = new ArrayList<>(resultados.keySet());
+
+            for (int m = 0; m < numMetricas; m++) {
+                double maxValor = 0;
+
+                // Encontrar valor máximo para escala
+                for (String cenario : nomeCenarios) {
+                    double valor = obterValorMetrica(resultados.get(cenario).avaliador, m);
+                    if (valor > maxValor) maxValor = valor;
+                }
+                if (maxValor == 0) maxValor = 1;
+
+                // Desenhar barras
+                for (int c = 0; c < numCenarios; c++) {
+                    String cenario = nomeCenarios.get(c);
+                    double valor = obterValorMetrica(resultados.get(cenario).avaliador, m);
+
+                    int altBarra = (int)((valor / maxValor) * alturaUtil);
+                    int x = (int)(padL + m * larguraGrupo + c * larguraBarra);
+                    int y = getHeight() - padB - altBarra;
+
+                    g2d.setColor(coresCenarios[c % coresCenarios.length]);
+                    g2d.fillRect(x, y, (int)larguraBarra - 2, altBarra);
+                    g2d.setColor(Color.BLACK);
+                    g2d.drawRect(x, y, (int)larguraBarra - 2, altBarra);
+
+                    // Mostrar valor acima da barra
+                    if (altBarra > 10) {
+                        g2d.setFont(new Font("SansSerif", Font.BOLD, 9));
+                        String valorStr = String.format("%.1f", valor);
+                        FontMetrics fm = g2d.getFontMetrics();
+                        int larguraTexto = fm.stringWidth(valorStr);
+                        int xTexto = x + ((int)larguraBarra - 2 - larguraTexto) / 2;
+                        int yTexto = y - 3;
+
+                        g2d.setColor(Color.BLACK);
+                        g2d.drawString(valorStr, xTexto, yTexto);
+                    }
+                }
+
+                // Label da métrica
+                g2d.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                int xLabel = (int)(padL + m * larguraGrupo + larguraGrupo/2 - 20);
+                g2d.drawString(metricas[m], xLabel, getHeight() - padB + 20);
+            }
+
+            // Legenda
+            int yLegenda = getHeight() - 20;
+            for (int c = 0; c < nomeCenarios.size(); c++) {
+                g2d.setColor(coresCenarios[c % coresCenarios.length]);
+                g2d.fillRect(padL + c * 150, yLegenda, 15, 15);
                 g2d.setColor(Color.BLACK);
-                FontMetrics metrics = g2d.getFontMetrics();
-                int labelWidth = metrics.stringWidth(labels[i]);
-                g2d.drawString(labels[i], x - labelWidth/2, getHeight() - padding + 15);
-                String valueString = String.format("%.0f ms", values[i]);
-                int valueWidth = metrics.stringWidth(valueString);
-                g2d.drawString(valueString, x - valueWidth/2, y - 5);
+                g2d.drawRect(padL + c * 150, yLegenda, 15, 15);
+                g2d.drawString(nomeCenarios.get(c), padL + c * 150 + 20, yLegenda + 12);
+            }
+        }
+
+        private double obterValorMetrica(Avaliador av, int indice) {
+            switch (indice) {
+                case 0: return av.getThroughput();
+                case 1: return av.getTempoMedioDeRetorno();
+                case 2: return av.getTempoMedioDeEspera();
+                case 3: return av.getTempoMedioDeResposta();
+                case 4: return av.getTrocasDeContexto();
+                default: return 0;
             }
         }
     }

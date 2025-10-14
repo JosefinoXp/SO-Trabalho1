@@ -3,13 +3,12 @@ import java.awt.*;
 import java.util.List;
 
 public class InterfaceGrafica extends JFrame {
-
     private PainelSimulacao painelSimulacao;
     private PainelMetricas painelMetricas;
     private JComboBox<Escalonador.Algoritmo> comboAlgoritmo;
     private JSpinner spinnerQuantum;
     private JButton btnIniciar;
-    private JSplitPane splitPaneMetricas;
+    private JButton btnLimparHistorico;
 
     public InterfaceGrafica() {
         setTitle("Simulador de Escalonador de Processos");
@@ -17,8 +16,9 @@ public class InterfaceGrafica extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
-        // -- Painel de Controle (Topo) --
+        // Painel de Controle
         JPanel painelControle = new JPanel(new FlowLayout(FlowLayout.LEFT));
+
         painelControle.add(new JLabel("Algoritmo:"));
         comboAlgoritmo = new JComboBox<>(Escalonador.Algoritmo.values());
         painelControle.add(comboAlgoritmo);
@@ -30,18 +30,26 @@ public class InterfaceGrafica extends JFrame {
         btnIniciar = new JButton("Iniciar Simulação");
         painelControle.add(btnIniciar);
 
-        // -- Painéis Principais --
+        btnLimparHistorico = new JButton("Limpar Histórico");
+        painelControle.add(btnLimparHistorico);
+
+        // Painéis Principais
         painelSimulacao = new PainelSimulacao();
         painelMetricas = new PainelMetricas();
 
-        JSplitPane splitPanePrincipal = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, painelSimulacao, painelMetricas);
+        JSplitPane splitPanePrincipal = new JSplitPane(
+                JSplitPane.HORIZONTAL_SPLIT,
+                painelSimulacao,
+                painelMetricas
+        );
         splitPanePrincipal.setResizeWeight(0.6);
 
-        // -- Adicionar componentes ao Frame --
         add(painelControle, BorderLayout.NORTH);
         add(splitPanePrincipal, BorderLayout.CENTER);
 
+        // Eventos
         btnIniciar.addActionListener(e -> iniciarSimulacao());
+        btnLimparHistorico.addActionListener(e -> painelMetricas.limparHistorico());
     }
 
     private void iniciarSimulacao() {
@@ -51,12 +59,13 @@ public class InterfaceGrafica extends JFrame {
 
         List<Processo> cargaDeTrabalho = Avaliador.gerarCargaDeTrabalho(5);
         painelSimulacao.prepararParaSimulacao(cargaDeTrabalho);
-        painelMetricas.limpar();
 
         Escalonador.Algoritmo algoritmo = (Escalonador.Algoritmo) comboAlgoritmo.getSelectedItem();
         int quantum = (int) spinnerQuantum.getValue();
 
-        // SwingWorker para rodar a simulação fora da Event Dispatch Thread (EDT)
+        // Nome do cenário para identificação
+        String nomeCenario = algoritmo.toString() + " (Q=" + quantum + "ms)";
+
         SwingWorker<Void, String> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
@@ -65,27 +74,40 @@ public class InterfaceGrafica extends JFrame {
                     public void onLog(String message) {
                         SwingUtilities.invokeLater(() -> painelSimulacao.adicionarLog(message));
                     }
+
                     @Override
                     public void onProcessoIniciado(Processo p) {
                         SwingUtilities.invokeLater(() -> painelSimulacao.atualizarProcesso(p));
                     }
+
                     @Override
                     public void onProcessoFinalizado(Processo p) {
                         SwingUtilities.invokeLater(() -> painelSimulacao.atualizarProcesso(p));
                     }
+
                     @Override
                     public void onConcluido() {
-                        // Ação de conclusão
+                        // Implementação vazia
                     }
                 };
 
                 Escalonador escalonador = new Escalonador(algoritmo, quantum, cargaDeTrabalho, callback);
+                // ou: new Escalonador(algoritmo, quantum, cargaDeTrabalho, callback, 8)  // overhead 8ms
+
                 escalonador.escalonar();
 
-                // Após a conclusão, prepara e exibe as métricas
-                long totalBurstTime = cargaDeTrabalho.stream().mapToLong(Processo::getTempoExecucao).sum();
-                Avaliador avaliador = new Avaliador(escalonador.getProcessos(), escalonador.getTempoTotal(), escalonador.getTrocasContexto(), totalBurstTime);
-                SwingUtilities.invokeLater(() -> painelMetricas.exibirMetricas(avaliador, escalonador.getProcessos()));
+                Avaliador avaliador = new Avaliador(
+                        escalonador.getProcessos(),
+                        escalonador.getTempoTotal(),           // wall time total
+                        escalonador.getTrocasContexto(),
+                        escalonador.getTempoOverheadTotalMs(),
+                        escalonador.getCpuTotalNs()            // CPU real medida
+                );
+
+                SwingUtilities.invokeLater(() ->
+                        painelMetricas.exibirMetricas(avaliador, escalonador.getProcessos(), nomeCenario)
+                );
+
 
                 return null;
             }
@@ -95,7 +117,8 @@ public class InterfaceGrafica extends JFrame {
                 btnIniciar.setEnabled(true);
                 comboAlgoritmo.setEnabled(true);
                 spinnerQuantum.setEnabled(true);
-                painelSimulacao.adicionarLog("\nSIMULAÇÃO CONCLUÍDA.");
+                painelSimulacao.adicionarLog("\n✓ SIMULAÇÃO CONCLUÍDA");
+                painelSimulacao.adicionarLog("Execute outro cenário para comparação\n");
             }
         };
 

@@ -4,59 +4,75 @@ import java.util.stream.Collectors;
 
 public class Avaliador {
     private List<Processo> processosConcluidos;
-    private double tempoTotalSimulacao; // em milissegundos
+    private double tempoTotalSimulacaoMs; // wall time da simulação
     private int trocasDeContexto;
-    private long tempoTotalBurst; // Soma do tempo de execução de todos os processos
+    private long tempoOverheadTotalMs;
+    private long cpuTotalNs; // CPU real medida pelo ThreadMXBean
 
-    public Avaliador(List<Processo> processosConcluidos, double tempoTotalSimulacao, int trocasDeContexto, long tempoTotalBurst) {
+    public Avaliador(List<Processo> processosConcluidos,
+                     double tempoTotalSimulacaoMs,
+                     int trocasDeContexto,
+                     long tempoOverheadTotalMs,
+                     long cpuTotalNs) {
         this.processosConcluidos = processosConcluidos;
-        this.tempoTotalSimulacao = tempoTotalSimulacao;
+        this.tempoTotalSimulacaoMs = tempoTotalSimulacaoMs;
         this.trocasDeContexto = trocasDeContexto;
-        this.tempoTotalBurst = tempoTotalBurst;
+        this.tempoOverheadTotalMs = tempoOverheadTotalMs;
+        this.cpuTotalNs = cpuTotalNs;
     }
 
     public static List<Processo> gerarCargaDeTrabalho(int totalProcessos) {
-        Random rand = new Random(42); // Seed fixa para reprodutibilidade
+        Random rand = new Random(42);
         return java.util.stream.IntStream.rangeClosed(1, totalProcessos)
                 .mapToObj(i -> {
                     int prioridade = rand.nextInt(10) + 1;
-                    int tempoExec = (rand.nextInt(5) + 2) * 1000;
-                    return new Processo(i, prioridade, tempoExec);
+                    int tempoExec = (rand.nextInt(5) + 2) * 1000; // 2–6s
+                    Processo p = new Processo(i, prioridade, tempoExec);
+                    // espalha intensidades de CPU: 30% a 90%
+                    p.setCpuIntensidade(0.3 + rand.nextDouble() * 0.6);
+                    return p;
                 })
                 .collect(Collectors.toList());
     }
 
+    // Retorna a soma do "burst" concluído (útil p/ timeline, não p/ CPU real)
+    private long getTempoTotalBurstMs() {
+        return processosConcluidos.stream().mapToLong(Processo::getTempoExecutado).sum();
+    }
+
     public double getThroughput() {
-        if (tempoTotalSimulacao == 0) return 0;
-        return processosConcluidos.size() / (tempoTotalSimulacao / 1000.0);
+        if (tempoTotalSimulacaoMs <= 0) return 0;
+        return processosConcluidos.size() / (tempoTotalSimulacaoMs / 1000.0);
     }
 
     public double getTempoMedioDeRetorno() {
-        return processosConcluidos.stream()
-                .mapToLong(Processo::getTempoDeRetorno)
-                .average()
-                .orElse(0.0);
+        return processosConcluidos.stream().mapToLong(Processo::getTempoDeRetorno).average().orElse(0.0);
     }
 
     public double getTempoMedioDeEspera() {
-        return processosConcluidos.stream()
-                .mapToLong(Processo::getTempoDeEspera)
-                .average()
-                .orElse(0.0);
+        return processosConcluidos.stream().mapToLong(Processo::getTempoDeEspera).average().orElse(0.0);
     }
+
     public double getTempoMedioDeResposta() {
-        return processosConcluidos.stream()
-                .mapToLong(Processo::getTempoDeResposta)
-                .average()
-                .orElse(0.0);
+        return processosConcluidos.stream().mapToLong(Processo::getTempoDeResposta).average().orElse(0.0);
     }
 
+    /**
+     * Utilização “realista”: CPU_time / wall_time.
+     * cpuTotalNs vem do ThreadMXBean; wall time = tempoTotalSimulacaoMs.
+     */
     public double getUtilizacaoCPU() {
-        if (tempoTotalSimulacao == 0) return 0.0;
-        return (double) tempoTotalBurst / tempoTotalSimulacao * 100.0;
+        if (tempoTotalSimulacaoMs <= 0) return 0.0;
+        double cpuMs = cpuTotalNs / 1_000_000.0;
+        double utiliz = (cpuMs / tempoTotalSimulacaoMs) * 100.0;
+        // limita para evitar ruídos de alta resolução
+        return Math.max(0.0, Math.min(utiliz, 100.0));
     }
 
-    public int getTrocasDeContexto() {
-        return trocasDeContexto;
-    }
+    public int getTrocasDeContexto() { return trocasDeContexto; }
+
+    public long getTempoOverheadTotalMs() { return tempoOverheadTotalMs; }
+
+    // Diagnósticos adicionais (se quiser exibir)
+    public long getCpuTotalNs() { return cpuTotalNs; }
 }
