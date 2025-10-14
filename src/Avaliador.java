@@ -4,13 +4,15 @@ import java.util.stream.Collectors;
 
 public class Avaliador {
     private List<Processo> processosConcluidos;
-    private double tempoTotalSimulacao; // em segundos
+    private double tempoTotalSimulacao; // em milissegundos
     private int trocasDeContexto;
+    private long tempoTotalBurst; // Soma do tempo de execução de todos os processos
 
-    public Avaliador(List<Processo> processosConcluidos, double tempoTotalSimulacao, int trocasDeContexto) {
+    public Avaliador(List<Processo> processosConcluidos, double tempoTotalSimulacao, int trocasDeContexto, long tempoTotalBurst) {
         this.processosConcluidos = processosConcluidos;
-        this.tempoTotalSimulacao = tempoTotalSimulacao / 1000.0;
+        this.tempoTotalSimulacao = tempoTotalSimulacao;
         this.trocasDeContexto = trocasDeContexto;
+        this.tempoTotalBurst = tempoTotalBurst;
     }
 
     public static List<Processo> gerarCargaDeTrabalho(int totalProcessos) {
@@ -26,7 +28,7 @@ public class Avaliador {
 
     public double getThroughput() {
         if (tempoTotalSimulacao == 0) return 0;
-        return processosConcluidos.size() / tempoTotalSimulacao;
+        return processosConcluidos.size() / (tempoTotalSimulacao / 1000.0);
     }
 
     public double getTempoMedioDeRetorno() {
@@ -47,6 +49,11 @@ public class Avaliador {
                 .mapToLong(Processo::getTempoDeResposta)
                 .average()
                 .orElse(0.0);
+    }
+
+    public double getUtilizacaoCPU() {
+        if (tempoTotalSimulacao == 0) return 0.0;
+        return (double) tempoTotalBurst / tempoTotalSimulacao * 100.0;
     }
 
     public int getTrocasDeContexto() {

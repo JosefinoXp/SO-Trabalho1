@@ -83,7 +83,8 @@ public class InterfaceGrafica extends JFrame {
                 escalonador.escalonar();
 
                 // Após a conclusão, prepara e exibe as métricas
-                Avaliador avaliador = new Avaliador(escalonador.getProcessos(), escalonador.getTempoTotal(), escalonador.getTrocasContexto());
+                long totalBurstTime = cargaDeTrabalho.stream().mapToLong(Processo::getTempoExecucao).sum();
+                Avaliador avaliador = new Avaliador(escalonador.getProcessos(), escalonador.getTempoTotal(), escalonador.getTrocasContexto(), totalBurstTime);
                 SwingUtilities.invokeLater(() -> painelMetricas.exibirMetricas(avaliador, escalonador.getProcessos()));
 
                 return null;
