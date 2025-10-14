@@ -9,10 +9,11 @@ public class PainelMetricas extends JPanel {
     private JTabbedPane tabbedPane;
     private JTextArea areaResumo;
     private JPanel painelGantt;
-    private JPanel painelGraficosDeBarra; // Renomeado para clareza
+    private JPanel painelGraficosDeBarra;
     private JPanel painelComparativo;
 
     // Armazena resultados de múltiplas simulações para comparação
+    // AQUI ESTAVA O ERRO -> Corrigido para "ResultadoSimulacao"
     private Map<String, ResultadoSimulacao> resultadosAcumulados = new HashMap<>();
 
     public PainelMetricas() {
@@ -31,7 +32,7 @@ public class PainelMetricas extends JPanel {
 
         painelGraficosDeBarra = new JPanel();
         painelGraficosDeBarra.setLayout(new BoxLayout(painelGraficosDeBarra, BoxLayout.Y_AXIS));
-        tabbedPane.addTab("Gráficos de Tempo", new JScrollPane(painelGraficosDeBarra)); // Nome da aba atualizado
+        tabbedPane.addTab("Gráficos de Tempo", new JScrollPane(painelGraficosDeBarra));
 
         painelComparativo = new JPanel(new BorderLayout());
         tabbedPane.addTab("Comparativo de Cenários", painelComparativo);
@@ -40,29 +41,61 @@ public class PainelMetricas extends JPanel {
     }
 
     public void exibirMetricas(Avaliador avaliador, List<Processo> processos, String cenario) {
-        // Armazena resultado do cenário atual
+        // Armazena resultado do cenário atual (CORRIGIDO)
         resultadosAcumulados.put(cenario, new ResultadoSimulacao(avaliador, processos));
 
         // 1. Resumo
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("=== CENÁRIO: %s ===\n\n", cenario));
-        sb.append(String.format("Throughput: %.2f processos/s\n", avaliador.getThroughput()));
-        sb.append(String.format("Trocas de Contexto: %d\n", avaliador.getTrocasDeContexto()));
-        sb.append(String.format("Utilização da CPU: %.2f %%\n\n", avaliador.getUtilizacaoCPU()));
-        sb.append(String.format("Tempo Médio de Retorno: %.2f ms\n", avaliador.getTempoMedioDeRetorno()));
-        sb.append(String.format("Tempo Médio de Espera: %.2f ms\n", avaliador.getTempoMedioDeEspera()));
-        sb.append(String.format("Tempo Médio de Resposta: %.2f ms\n", avaliador.getTempoMedioDeResposta()));
+        sb.append("--- MÉTRICAS GERAIS ---\n");
+        sb.append(String.format("Throughput.........: %.2f processos/s\n", avaliador.getThroughput()));
+        sb.append(String.format("Trocas de Contexto...: %d\n", avaliador.getTrocasDeContexto()));
+        sb.append(String.format("Utilização da CPU....: %.2f %%\n\n", avaliador.getUtilizacaoCPU()));
+
+        sb.append("--- MÉTRICAS DE TEMPO (MÉDIAS) ---\n");
+        double retornoMedioMs = avaliador.getTempoMedioDeRetorno();
+        sb.append(String.format("Tempo Médio de Retorno.: %-8.2f ms (%-6.2fs)\n",
+                retornoMedioMs, retornoMedioMs / 1000.0));
+        double esperaMediaMs = avaliador.getTempoMedioDeEspera();
+        sb.append(String.format("Tempo Médio de Espera..: %-8.2f ms (%-6.2fs)\n",
+                esperaMediaMs, esperaMediaMs / 1000.0));
+        double respostaMediaMs = avaliador.getTempoMedioDeResposta();
+        sb.append(String.format("Tempo Médio de Resposta: %-8.2f ms (%-6.2fs)\n",
+                respostaMediaMs, respostaMediaMs / 1000.0));
+
+        sb.append("\n\n--- MÉTRICAS INDIVIDUAIS POR PROCESSO ---\n");
+        sb.append("--------------------------------------------------------------------------------\n");
+        sb.append(String.format("%-5s | %-25s | %-25s | %-25s\n", "ID", "T. Retorno", "T. Espera", "T. Resposta"));
+        sb.append("--------------------------------------------------------------------------------\n");
+
+        processos.sort(Comparator.comparingInt(Processo::getIdProcesso));
+
+        for (Processo p : processos) {
+            long retornoMs = p.getTempoDeRetorno();
+            double retornoS = retornoMs / 1000.0;
+            long esperaMs = p.getTempoDeEspera();
+            double esperaS = esperaMs / 1000.0;
+            long respostaMs = p.getTempoDeResposta();
+            double respostaS = respostaMs / 1000.0;
+
+            String linha = String.format("P%-4d| %-8d ms (%-6.2fs) | %-8d ms (%-6.2fs) | %-8d ms (%-6.2fs)\n",
+                    p.getIdProcesso(),
+                    retornoMs, retornoS,
+                    esperaMs, esperaS,
+                    respostaMs, respostaS);
+            sb.append(linha);
+        }
+        sb.append("--------------------------------------------------------------------------------\n");
+
         areaResumo.setText(sb.toString());
+        areaResumo.setCaretPosition(0);
 
         // 2. Gantt
         painelGantt.removeAll();
         painelGantt.add(new JScrollPane(new GanttChartPanel(processos)), BorderLayout.CENTER);
 
-        // 3. Gráficos de Barra (CORRIGIDO)
+        // 3. Gráficos de Barra
         painelGraficosDeBarra.removeAll();
-        // Ordena os processos por ID para consistência nos gráficos
-        processos.sort(Comparator.comparingInt(Processo::getIdProcesso));
-
         painelGraficosDeBarra.add(new GraficoBarrasPanel(processos, "Gráfico - Tempo de Retorno", Processo::getTempoDeRetorno));
         painelGraficosDeBarra.add(new GraficoBarrasPanel(processos, "Gráfico - Tempo de Espera", Processo::getTempoDeEspera));
         painelGraficosDeBarra.add(new GraficoBarrasPanel(processos, "Gráfico - Tempo de Resposta", Processo::getTempoDeResposta));
@@ -96,6 +129,7 @@ public class PainelMetricas extends JPanel {
 
     // ========== CLASSES INTERNAS ==========
 
+    // AQUI TAMBÉM ESTAVA O ERRO -> Corrigido para "ResultadoSimulacao"
     private static class ResultadoSimulacao {
         Avaliador avaliador;
         List<Processo> processos;
@@ -106,9 +140,7 @@ public class PainelMetricas extends JPanel {
         }
     }
 
-    // GANTT - mostra timeline de execução
     private static class GanttChartPanel extends JPanel {
-        // ... (código inalterado, pode manter como estava)
         private final List<Processo> processos;
         private long tempoMin, tempoMax;
         private final Color[] cores = {
@@ -169,7 +201,6 @@ public class PainelMetricas extends JPanel {
 
             setPreferredSize(new Dimension(getWidth(), y + padB));
 
-            // Eixo do tempo
             int yEixo = y;
             g2d.setColor(Color.BLACK);
             g2d.drawLine(padL, yEixo, getWidth() - padR, yEixo);
@@ -183,7 +214,6 @@ public class PainelMetricas extends JPanel {
         }
     }
 
-    // --- NOVA CLASSE PARA GRÁFICO DE BARRAS ---
     private static class GraficoBarrasPanel extends JPanel {
         private final List<Processo> processos;
         private final String titulo;
@@ -218,16 +248,13 @@ public class PainelMetricas extends JPanel {
             int alturaUtil = getHeight() - padT - padB;
             double larguraBarra = (double) larguraUtil / processos.size();
 
-            // Título
             g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
             g2d.drawString(titulo, padL, 30);
 
-            // Eixos
             g2d.setColor(Color.BLACK);
             g2d.drawLine(padL, getHeight() - padB, getWidth() - padR, getHeight() - padB); // X
             g2d.drawLine(padL, padT, padL, getHeight() - padB); // Y
 
-            // Barras e labels
             for (int i = 0; i < processos.size(); i++) {
                 Processo p = processos.get(i);
                 long valor = extratorDeValor.apply(p);
@@ -236,23 +263,19 @@ public class PainelMetricas extends JPanel {
                 int x = (int) (padL + i * larguraBarra);
                 int y = getHeight() - padB - altBarra;
 
-                // Desenha a barra
                 g2d.setColor(new Color(70, 130, 180));
                 g2d.fillRect(x + 2, y, (int) larguraBarra - 4, altBarra);
                 g2d.setColor(Color.BLACK);
                 g2d.drawRect(x + 2, y, (int) larguraBarra - 4, altBarra);
 
-                // Label do processo no eixo X
                 String labelProcesso = "P" + p.getIdProcesso();
                 g2d.setFont(new Font("SansSerif", Font.PLAIN, 10));
                 g2d.drawString(labelProcesso, x + (int)larguraBarra/2 - 5, getHeight() - padB + 15);
 
-                // Label do valor acima da barra
                 String labelValor = String.valueOf(valor);
                 g2d.drawString(labelValor, x + (int)larguraBarra/2 - 10, y - 5);
             }
 
-            // Labels dos eixos
             g2d.setFont(new Font("SansSerif", Font.BOLD, 11));
             g2d.drawString("Processos", getWidth()/2 - 30, getHeight() - 10);
             g2d.rotate(-Math.PI/2);
@@ -260,9 +283,8 @@ public class PainelMetricas extends JPanel {
         }
     }
 
-    // COMPARATIVO ENTRE CENÁRIOS - (código inalterado, pode manter como estava)
+    // AQUI TAMBÉM ESTAVA O ERRO -> Corrigido para "ResultadoSimulacao"
     private static class ComparativoCenariosPanel extends JPanel {
-        // ... (código inalterado, pode manter como estava)
         private final Map<String, ResultadoSimulacao> resultados;
 
         public ComparativoCenariosPanel(Map<String, ResultadoSimulacao> resultados) {
@@ -292,11 +314,9 @@ public class PainelMetricas extends JPanel {
             double larguraGrupo = (double)larguraUtil / numMetricas;
             double larguraBarra = larguraGrupo / (numCenarios + 1);
 
-            // Título
             g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
             g2d.drawString("Comparação de Métricas por Cenário", padL, 30);
 
-            // Eixos
             g2d.setColor(Color.BLACK);
             g2d.drawLine(padL, getHeight() - padB, getWidth() - padR, getHeight() - padB);
             g2d.drawLine(padL, padT, padL, getHeight() - padB);
@@ -307,14 +327,12 @@ public class PainelMetricas extends JPanel {
             for (int m = 0; m < numMetricas; m++) {
                 double maxValor = 0;
 
-                // Encontrar valor máximo para escala
                 for (String cenario : nomeCenarios) {
                     double valor = obterValorMetrica(resultados.get(cenario).avaliador, m);
                     if (valor > maxValor) maxValor = valor;
                 }
                 if (maxValor == 0) maxValor = 1;
 
-                // Desenhar barras
                 for (int c = 0; c < numCenarios; c++) {
                     String cenario = nomeCenarios.get(c);
                     double valor = obterValorMetrica(resultados.get(cenario).avaliador, m);
@@ -328,7 +346,6 @@ public class PainelMetricas extends JPanel {
                     g2d.setColor(Color.BLACK);
                     g2d.drawRect(x, y, (int)larguraBarra - 2, altBarra);
 
-                    // Mostrar valor acima da barra
                     if (altBarra > 10) {
                         g2d.setFont(new Font("SansSerif", Font.BOLD, 9));
                         String valorStr = String.format("%.1f", valor);
@@ -342,13 +359,11 @@ public class PainelMetricas extends JPanel {
                     }
                 }
 
-                // Label da métrica
-                g2d.setFont(new Font("SansSerif", Font.PLAIN, 10));
                 int xLabel = (int)(padL + m * larguraGrupo + larguraGrupo/2 - 20);
+                g2d.setFont(new Font("SansSerif", Font.PLAIN, 10));
                 g2d.drawString(metricas[m], xLabel, getHeight() - padB + 20);
             }
 
-            // Legenda
             int yLegenda = getHeight() - 20;
             for (int c = 0; c < nomeCenarios.size(); c++) {
                 g2d.setColor(coresCenarios[c % coresCenarios.length]);
